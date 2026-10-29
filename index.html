@@ -87,7 +87,7 @@
             <!-- Status Container -->
             <div id="status-container" class="hidden bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-gray-700" id="status-text">準備完了</span>
+                    <span class="text-sm font-medium text-gray-700" id="status-text" role="status" aria-live="polite">準備完了</span>
                     <span class="text-xs text-gray-500" id="progress-percent">0%</span>
                 </div>
                 <div class="w-full bg-gray-200 rounded-full h-2">
@@ -152,6 +152,11 @@
     const placeholderText = document.getElementById('placeholder-text');
     const downloadZipBtn = document.getElementById('download-zip-btn');
 
+    if (!apiKey.trim()) {
+        statusContainer.classList.remove('hidden');
+        statusText.textContent = 'AI解析の接続設定が未完了です。管理者に接続設定を依頼してください。';
+    }
+
     // Controls
     dropZone.onclick = () => pdfInput.click();
     pdfInput.onchange = (e) => e.target.files.length && handleFile(e.target.files[0]);
@@ -170,7 +175,7 @@
         }
         uploadedFile = file;
         fileNameDisplay.textContent = file.name;
-        startBtn.disabled = false;
+        startBtn.disabled = !apiKey.trim();
     }
 
     analysisMode.onchange = () => pageSelection.classList.toggle('hidden', analysisMode.value !== 'select');
@@ -191,14 +196,34 @@
         statusText.textContent = "停止しています...";
     };
 
-    async function pdfToImages(file, pageIndices) {
+    class PageSelectionError extends Error {}
+
+    function parsePageSelection(value, numPages) {
+        const selected = new Set();
+        for (const part of value.split(',')) {
+            const match = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+            if (!match) {
+                throw new PageSelectionError('ページ番号は「1, 3-5」の形式で入力してください。');
+            }
+            const first = Number(match[1]);
+            const last = Number(match[2] || match[1]);
+            if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) || first < 1 || last > numPages || first > last) {
+                throw new PageSelectionError(`ページ番号は1〜${numPages}の範囲で、小さい順の範囲を指定してください。`);
+            }
+            for (let page = first; page <= last; page++) selected.add(page);
+        }
+        return [...selected];
+    }
+
+    async function pdfToImages(file, pageSelection) {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
         const images = [];
-        const indices = pageIndices || Array.from({ length: pdf.numPages }, (_, i) => i + 1);
+        const indices = pageSelection === null
+            ? Array.from({ length: pdf.numPages }, (_, i) => i + 1)
+            : parsePageSelection(pageSelection, pdf.numPages);
 
         for (const pageIdx of indices) {
-            if (pageIdx > pdf.numPages || pageIdx < 1) continue;
             const page = await pdf.getPage(pageIdx);
             const viewport = page.getViewport({ scale: 2.2 }); // 少し解像度を上げて精度向上
             const canvas = document.createElement('canvas');
@@ -273,6 +298,11 @@
 
     startBtn.onclick = async () => {
         if (!uploadedFile) return;
+        if (!apiKey.trim()) {
+            statusContainer.classList.remove('hidden');
+            statusText.textContent = 'AI解析の接続設定が未完了です。管理者に接続設定を依頼してください。';
+            return;
+        }
         
         // Init UI
         resultsList.innerHTML = '';
@@ -285,15 +315,18 @@
         resultsData = [];
         isPaused = false;
         isStopped = false;
+        progressPercent.textContent = '0%';
+        progressBar.style.width = '0%';
 
         let targetPages = null;
         if (analysisMode.value === 'select') {
-            targetPages = pageRangeInput.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            targetPages = pageRangeInput.value;
         }
 
         try {
             statusText.textContent = "PDFを準備中...";
             const images = await pdfToImages(uploadedFile, targetPages);
+            let failedPages = 0;
 
             for (let i = 0; i < images.length; i++) {
                 // Check Pause State
@@ -326,16 +359,26 @@
                     resultsData.push(data);
                     displayResult(data);
                 } catch (err) {
+                    failedPages++;
                     console.error("Page analysis failed", err);
                 }
             }
 
-            statusText.textContent = isStopped ? "解析を停止しました" : "解析完了";
-            progressPercent.textContent = `100%`;
-            progressBar.style.width = `100%`;
+            const successPercent = Math.round((resultsData.length / images.length) * 100);
+            if (isStopped) {
+                statusText.textContent = `解析を停止しました（成功 ${resultsData.length} / ${images.length} ページ）`;
+            } else if (failedPages > 0) {
+                statusText.textContent = `解析できなかったページがあります（成功 ${resultsData.length} / ${images.length} ページ）。接続設定やファイルを確認し、再実行してください。`;
+            } else {
+                statusText.textContent = "解析完了";
+            }
+            progressPercent.textContent = `${successPercent}%`;
+            progressBar.style.width = `${successPercent}%`;
             if (resultsData.length > 0) downloadZipBtn.classList.remove('hidden');
         } catch (error) {
-            statusText.textContent = "重大なエラーが発生しました";
+            statusText.textContent = error instanceof PageSelectionError
+                ? error.message
+                : "PDFを開けませんでした。ファイルを確認して再実行してください。";
         } finally {
             controlPanel.classList.add('hidden');
             startBtn.classList.remove('hidden');
@@ -416,7 +459,13 @@
         statusText.textContent = "Zipパッケージを作成中...";
         const zip = new JSZip();
         resultsData.forEach(data => {
-            zip.file(`${data.suggested_filename}.csv`, convertToCSV(data));
+            let filename = `${data.suggested_filename}.csv`;
+            let duplicate = 0;
+            while (zip.file(filename)) {
+                duplicate++;
+                filename = `${data.suggested_filename}_PAGE_${data.page_idx}${duplicate > 1 ? `_${duplicate}` : ''}.csv`;
+            }
+            zip.file(filename, convertToCSV(data));
         });
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(zipBlob);
