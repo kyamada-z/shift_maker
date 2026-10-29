@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "repository": "kyamada-z/shift_maker",
+  "baselineMain": "c6685634b05446c801e1c35b12914fe43811cd82",
+  "baselineTree": "53d1c70c4ccec22197b86753a132a3557b55a98c",
+  "baselineIndexBlob": "75f649541519879c63c25e9e7faaaa5bd60ece5f",
+  "baselineIndexSha256": "3515c328bbd4c39eae4eeb0cddf004eae8ba5ddcccdc351c16a98444261541c2",
+  "normalFutureScope": "Exactly the two matching stable PDF.js 4 CDN version tokens, no downgrade below4.10.38; all other source bytes frozen",
+  "normalizedSourceSha256": "90cfdcbc0eceef76603c71aeef3b98f38740b643dcdcd803b916286b9db9aa7d",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 4132,
+      "sha256": "e09624f8d5867a218cc678898d98df1d5a60df75256e64a1eb363baae86fa78f",
+      "gitBlob": "78af22257fa940b683444855bd41488cc9cb5736"
+    },
+    {
+      "path": "verify-browser.cjs",
+      "bytes": 12392,
+      "sha256": "8b6b14ad168f64068ce3fec460e57f666a15dad6cfd64560eadb14ebe2a9fa39",
+      "gitBlob": "d1e01c993f3ead8623f8d53a3b66105e99d2da8e"
+    },
+    {
+      "path": "validate-source.cjs",
+      "bytes": 1729,
+      "sha256": "45913717815c555e039e307061c667edb109c7f53445663b1f95bd9af30102bb",
+      "gitBlob": "4cb96107a6ad622aa0776891faab96475c49527f"
+    },
+    {
+      "path": "production-tailwind.css",
+      "bytes": 10808,
+      "sha256": "41c480e8f9b70f50da54ce464b8300aa7fd22dc6f32ede389850044225de89e0",
+      "gitBlob": "885b45718a10f0b66b06332e22928c119d00ff81"
+    },
+    {
+      "path": "synthetic-two-page.pdf",
+      "bytes": 1880,
+      "sha256": "d46a6d93847ca27cc108ca53b640898a899b117924a132d0eec925341e4ad1b4",
+      "gitBlob": "393dd8a7d0e5b489d39d7e4fe2fb6d927ff777e4"
+    }
+  ],
+  "limitations": [
+    "AI key remains empty; app visibly blocks analysis until separately authorized secure provider setup; no realAI readiness claim",
+    "CSS fixture is existing initial production DOM output, not proof of live CDN or generated result styles",
+    "Live initial screen must also be checked after publish"
+  ],
+  "verificationProtocol": "Read README.md; verify every listed file; run source validator; independently verify official npm SHA512 integrity and exact CDN assets; then run full browser helper with seven explicit path arguments, synthetic fixtures only"
+}
